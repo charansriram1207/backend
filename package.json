@@ -4,7 +4,7 @@
   "description": "Email dispatch backend service for offsite visit audit logging",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node --dns-result-order=ipv4first src/index.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
