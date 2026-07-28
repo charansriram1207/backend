@@ -123,11 +123,58 @@ app.post('/api/audit/offsite-start', async (req, res) => {
     `,
   };
 
+  // Try to send via Telegram if configured, otherwise fallback to Email
+  const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN;
+  const telegramChatId = process.env.TELEGRAM_CHAT_ID;
+
+  if (telegramBotToken && telegramChatId && telegramChatId !== 'YOUR_CHAT_ID_HERE') {
+    try {
+      console.log(`[Telegram] Sending notification for visit ${visitId} to chat ${telegramChatId}`);
+      
+      const messageText = `
+<b>🚨 Geofence Alert: Off-site Visit Started</b>
+
+👤 <b>Driver Name:</b> ${driverName}
+👥 <b>Helpers:</b> ${helpersList}
+📍 <b>Route Name:</b> <code>${formattedRouteName}</code>
+🏢 <b>Customer:</b> ${customerName} (Visit ID: ${visitId})
+📏 <b>Distance Offsite:</b> <b>${formattedDistance}</b>
+🕒 <b>Start Time:</b> ${dateString} (IST)
+${driverLocation ? `🌐 <b>Driver:</b> Lat: ${driverLocation.latitude}, Lng: ${driverLocation.longitude}` : ''}
+${customerLocation ? `🌐 <b>Customer:</b> Lat: ${customerLocation.latitude}, Lng: ${customerLocation.longitude}` : ''}
+
+⚠️ <i>Note: The driver was located at a distance of ${formattedDistance} from the customer's registered location at the time of tapping "Start Visit".</i>
+      `.trim();
+
+      const tgResponse = await fetch(`https://api.telegram.org/bot${telegramBotToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: telegramChatId,
+          text: messageText,
+          parse_mode: 'HTML',
+        }),
+      });
+
+      if (!tgResponse.ok) {
+        const tgErrText = await tgResponse.text();
+        throw new Error(`Telegram API returned status ${tgResponse.status}: ${tgErrText}`);
+      }
+
+      const tgResult = await tgResponse.json();
+      console.log(`[Telegram] Success! Message sent:`, tgResult.result?.message_id);
+      return res.status(200).json({ success: true, method: 'telegram', messageId: tgResult.result?.message_id });
+    } catch (tgError) {
+      console.error('[Telegram] Failed to send telegram notification:', tgError);
+      console.log('[Fallback] Proceeding to fallback email notification...');
+    }
+  }
+
   try {
     console.log(`[Email] Attempting to send email for visit ${visitId} from ${process.env.SMTP_USER} to ${process.env.REPORT_RECEIVER_EMAIL}`);
     const info = await transporter.sendMail(mailOptions);
     console.log(`[Email] Success! Notification sent for visit ${visitId}:`, info.messageId);
-    return res.status(200).json({ success: true, messageId: info.messageId });
+    return res.status(200).json({ success: true, method: 'email', messageId: info.messageId });
   } catch (error) {
     console.error(`[Email] Failed to send email for visit ${visitId}:`, error);
     if (error && error.stack) {
