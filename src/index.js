@@ -8,14 +8,18 @@ app.use(cors());
 app.use(express.json());
 
 // Initialize Nodemailer transporter
+const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10);
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT || '587', 10),
-  secure: process.env.SMTP_PORT === '465', // true for 465, false for other ports
+  port: smtpPort,
+  secure: smtpPort === 465, // true for 465, false for other ports
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
+  family: 4, // Force IPv4 to prevent IPv6 DNS resolution timeouts on Render/cloud networks
+  connectionTimeout: 15000,
+  greetingTimeout: 15000,
 });
 
 // Verify connection configuration
