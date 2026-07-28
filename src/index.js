@@ -29,6 +29,9 @@ transporter.verify((error) => {
 
 // Endpoint to log offsite visit starts and send email notifications
 app.post('/api/audit/offsite-start', async (req, res) => {
+  console.log(`[API] Received offsite-start request at ${new Date().toISOString()}`);
+  console.log('[API] Request body:', JSON.stringify(req.body, null, 2));
+
   const {
     driverName,
     helperNames,
@@ -43,7 +46,9 @@ app.post('/api/audit/offsite-start', async (req, res) => {
 
   // Simple validation
   if (!driverName || !visitId || !customerName) {
-    return res.status(400).json({ error: 'Missing required fields (driverName, visitId, customerName)' });
+    const errorMsg = `Missing required fields (driverName: ${driverName}, visitId: ${visitId}, customerName: ${customerName})`;
+    console.error('[API] Validation failed:', errorMsg);
+    return res.status(400).json({ error: errorMsg });
   }
 
   const formattedDistance = distanceMeters 
@@ -115,12 +120,16 @@ app.post('/api/audit/offsite-start', async (req, res) => {
   };
 
   try {
+    console.log(`[Email] Attempting to send email for visit ${visitId} from ${process.env.SMTP_USER} to ${process.env.REPORT_RECEIVER_EMAIL}`);
     const info = await transporter.sendMail(mailOptions);
-    console.log(`[Email] Notification sent for visit ${visitId}:`, info.messageId);
+    console.log(`[Email] Success! Notification sent for visit ${visitId}:`, info.messageId);
     return res.status(200).json({ success: true, messageId: info.messageId });
   } catch (error) {
     console.error(`[Email] Failed to send email for visit ${visitId}:`, error);
-    return res.status(500).json({ error: 'Failed to send automated email notification' });
+    if (error && error.stack) {
+      console.error('[Email] Error stack trace:', error.stack);
+    }
+    return res.status(500).json({ error: 'Failed to send automated email notification', details: error.message });
   }
 });
 
